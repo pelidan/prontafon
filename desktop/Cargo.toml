@@ -1,0 +1,71 @@
+[package]
+name = "prontafon-desktop"
+version = "0.1.0"
+edition = "2021"
+authors = ["Prontafon Team"]
+description = "Linux desktop companion for Prontafon voice-to-keyboard bridge"
+license = "Apache-2.0"
+repository = "https://github.com/pelidan/prontafon"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Bluetooth - BLE GATT only (Phase 5: RFCOMM removed)
+bluer = { version = "0.17", features = ["bluetoothd"] }
+uuid = { version = "1.6", features = ["v4"] }
+
+# GUI
+gtk4 = "0.7"
+glib = "0.18"
+
+# System tray
+ksni = "0.2"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Cryptography
+aes-gcm = "0.10"
+sha2 = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+rand = "0.8"
+base64 = "0.21"
+hex = "0.4"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+
+# Utilities
+dirs = "5.0"
+gethostname = "0.4"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# State management
+parking_lot = "0.12"
+
+# File watching
+notify = "6.1"
+
+# Input simulation
+enigo = "0.2"
+
+[features]
+default = ["x11"]
+x11 = []
+wayland = []
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[[bin]]
+name = "test_input"
+path = "src/bin/test_input.rs"

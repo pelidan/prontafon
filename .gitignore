@@ -1,0 +1,46 @@
+# Rust
+desktop/target/
+**/*.rs.bk
+Cargo.lock
+
+# Flutter (legacy)
+android/.dart_tool/
+android/.packages
+android/.pub-cache/
+android/.pub/
+android/build/
+android/.flutter-plugins
+android/.flutter-plugins-dependencies
+android/*.iml
+android/.idea/
+android/.metadata
+
+# Android native build artifacts
+android/android/app/build/
+android/android/build/
+android/android/.gradle/
+android/android/local.properties
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+.idea/
+android/android/app/.project
+android/android/app/.settings/
+
+# Ignore developer plan artifacts
+.opencode/
+target/

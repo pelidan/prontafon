@@ -1,0 +1,22 @@
+Package: prontafon
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Daniel Pelikan <development@pelikan.one>
+Depends: libgtk-4-1, libadwaita-1-0, bluez, libdbus-1-3, libsqlite3-0
+Recommends: ydotool
+Description: Voice-to-keyboard bridge for seamless dictation
+ Prontafon is a voice-to-keyboard bridge application that allows
+ Android devices to transmit speech-to-text to a Linux desktop via
+ Bluetooth for seamless dictation and voice commands.
+ .
+ Features:
+  - Real-time speech-to-text transmission via Bluetooth
+  - Encrypted communication with AES-256-GCM
+  - Voice commands for navigation and editing
+  - System tray integration
+  - History tracking with SQLite
+  - Support for both X11 and Wayland
+Homepage: https://github.com/pelidan/prontafon
+License: Apache-2.0

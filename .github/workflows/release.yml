@@ -1,0 +1,370 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+      tag: ${{ steps.set_version.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Version must be in semantic format (e.g., 1.2.3)"
+            exit 1
+          fi
+
+      - name: Set version output
+        id: set_version
+        run: |
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.version }} already exists"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v${{ inputs.version }} does not exist"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify version in source files
+        run: |
+          # Check that the version in Cargo.toml matches the requested version
+          CARGO_VERSION=$(grep '^version = ' desktop/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$CARGO_VERSION" != "${{ inputs.version }}" ]; then
+            echo "Error: Version mismatch! Cargo.toml has $CARGO_VERSION but requested ${{ inputs.version }}"
+            echo "Please update the version in desktop/Cargo.toml before running the release."
+            exit 1
+          fi
+          echo "Version ${{ inputs.version }} verified in source files"
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.tag_exists == 'false'
+        run: |
+          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+  linux:
+    name: Build Linux Packages
+    needs: prepare
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libdbus-1-dev \
+            libsqlite3-dev \
+            libbluetooth-dev \
+            libxdo-dev \
+            pkg-config \
+            build-essential \
+            imagemagick \
+            rpm \
+            fakeroot \
+            dpkg-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop -> target"
+          cache-on-failure: true
+
+      - name: Build release binary
+        working-directory: desktop
+        run: |
+          cargo build --release --verbose
+          strip target/release/prontafon-desktop
+
+      - name: Build .deb package
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          PACKAGE_NAME="prontafon_${VERSION}_amd64"
+          PACKAGE_DIR="${PACKAGE_NAME}"
+          
+          # Create package structure
+          mkdir -p "${PACKAGE_DIR}/DEBIAN"
+          mkdir -p "${PACKAGE_DIR}/usr/bin"
+          mkdir -p "${PACKAGE_DIR}/usr/share/applications"
+          mkdir -p "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${PACKAGE_DIR}/usr/lib/systemd/user"
+          
+          # Copy binary
+          cp desktop/target/release/prontafon-desktop "${PACKAGE_DIR}/usr/bin/"
+          chmod 755 "${PACKAGE_DIR}/usr/bin/prontafon-desktop"
+          
+          # Copy desktop file
+          cp desktop/resources/prontafon.desktop "${PACKAGE_DIR}/usr/share/applications/"
+          
+          # Copy icon (if exists)
+          if [ -f desktop/resources/icons/prontafon.png ]; then
+            cp desktop/resources/icons/prontafon.png "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps/"
+          fi
+          
+          # Copy systemd service
+          cp desktop/resources/prontafon.service "${PACKAGE_DIR}/usr/lib/systemd/user/"
+          
+          # Copy control file
+          cp desktop/packaging/deb/DEBIAN/control "${PACKAGE_DIR}/DEBIAN/"
+          sed -i "s/VERSION/${VERSION}/" "${PACKAGE_DIR}/DEBIAN/control"
+          
+          # Copy maintainer scripts
+          cp desktop/packaging/deb/DEBIAN/postinst "${PACKAGE_DIR}/DEBIAN/"
+          cp desktop/packaging/deb/DEBIAN/prerm "${PACKAGE_DIR}/DEBIAN/"
+          chmod 755 "${PACKAGE_DIR}/DEBIAN/postinst"
+          chmod 755 "${PACKAGE_DIR}/DEBIAN/prerm"
+          
+          # Build package
+          dpkg-deb --build "${PACKAGE_DIR}"
+          mv "${PACKAGE_NAME}.deb" "prontafon-${VERSION}-linux-x86_64.deb"
+
+      - name: Build .rpm package
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          # Setup RPM build environment
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          
+          # Create staging directory with flat structure
+          STAGING_DIR="prontafon-${VERSION}"
+          mkdir -p "${STAGING_DIR}"
+          cp desktop/target/release/prontafon-desktop "${STAGING_DIR}/"
+          cp desktop/resources/prontafon.desktop "${STAGING_DIR}/"
+          cp desktop/resources/prontafon.service "${STAGING_DIR}/"
+          
+          # Create source tarball
+          tar czf ~/rpmbuild/SOURCES/prontafon-${VERSION}.tar.gz "${STAGING_DIR}"
+          rm -rf "${STAGING_DIR}"
+          
+          # Copy and process spec file
+          cp desktop/packaging/rpm/prontafon.spec ~/rpmbuild/SPECS/
+          sed -i "s/VERSION/${VERSION}/" ~/rpmbuild/SPECS/prontafon.spec
+          
+          # Build RPM (--nodeps skips dependency checking since we're using pre-built binary)
+          rpmbuild -bb --nodeps ~/rpmbuild/SPECS/prontafon.spec
+          
+          # Copy RPM to workspace
+          cp ~/rpmbuild/RPMS/x86_64/prontafon-${VERSION}-1.x86_64.rpm \
+            prontafon-${VERSION}-linux-x86_64.rpm
+
+      - name: Download AppImage tools
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          # Copy binary
+          cp desktop/target/release/prontafon-desktop AppDir/usr/bin/
+          
+          # Copy desktop file
+          cp desktop/resources/prontafon.desktop AppDir/usr/share/applications/
+          
+          # Copy or create icon
+          if [ -f desktop/resources/icons/prontafon.png ]; then
+            cp desktop/resources/icons/prontafon.png AppDir/usr/share/icons/hicolor/256x256/apps/
+          else
+            # Create a simple placeholder icon using convert
+            convert -size 256x256 xc:blue -fill white -gravity center \
+              -draw "circle 128,128 128,228" \
+              AppDir/usr/share/icons/hicolor/256x256/apps/prontafon.png || \
+            # Fallback: Create a minimal PNG if convert fails
+            (sudo apt-get install -y imagemagick fonts-dejavu-core && \
+             convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 \
+               -font DejaVu-Sans -annotate 0 "Prontafon" AppDir/usr/share/icons/hicolor/256x256/apps/prontafon.png)
+          fi
+          
+          # Create AppImage symlinks
+          ln -sf usr/share/applications/prontafon.desktop AppDir/
+          ln -sf usr/share/icons/hicolor/256x256/apps/prontafon.png AppDir/
+          
+          # Extract appimagetool (works without FUSE)
+          ./appimagetool-x86_64.AppImage --appimage-extract
+          
+          # Build AppImage using extracted tool
+          ARCH=x86_64 VERSION=${VERSION} ./squashfs-root/AppRun AppDir \
+            Prontafon-${VERSION}-x86_64.AppImage
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            prontafon-*.deb
+            prontafon-*.rpm
+            Prontafon-*.AppImage
+          retention-days: 5
+
+  source:
+    name: Create Source Archive
+    needs: prepare
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create source tarball
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git archive --format=tar.gz --prefix=prontafon-${VERSION}/ \
+            "v${VERSION}" > prontafon-${VERSION}-source.tar.gz
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-archive
+          path: prontafon-*-source.tar.gz
+          retention-days: 5
+
+  release:
+    name: Create GitHub Release
+    needs: [prepare, linux, source]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifact structure
+        run: ls -R artifacts/
+
+      - name: Prepare release files
+        run: |
+          mkdir release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -lh release-files/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cat > release-notes.md << 'EOF'
+          ## Prontafon v${{ needs.prepare.outputs.version }}
+          
+          ### Downloads
+          
+          **Linux:**
+          - `.deb` - For Ubuntu/Debian-based systems
+          - `.rpm` - For Fedora/RHEL-based systems
+          - `.AppImage` - Universal Linux binary
+          
+          **Source:**
+          - `-source.tar.gz` - Complete source code
+          
+          ### Installation
+          
+          #### Linux
+          
+          **Debian/Ubuntu:**
+          ```bash
+          sudo dpkg -i prontafon-${{ needs.prepare.outputs.version }}-linux-x86_64.deb
+          ```
+          
+          **Fedora/RHEL:**
+          ```bash
+          sudo rpm -i prontafon-${{ needs.prepare.outputs.version }}-linux-x86_64.rpm
+          ```
+          
+          **AppImage:**
+          ```bash
+          chmod +x Prontafon-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          ./Prontafon-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          ```
+          
+          ### What's Changed
+          
+          See the [commit history](https://github.com/${{ github.repository }}/commits/v${{ needs.prepare.outputs.version }}) for details.
+          
+          ### Requirements
+          
+          **Linux:**
+          - Ubuntu 22.04+ or equivalent
+          - GTK4, libadwaita
+          - BlueZ (Bluetooth stack)
+          - X11 or Wayland
+          
+          ---
+          
+          **Full Documentation:** See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Release ${{ needs.prepare.outputs.tag }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          echo "## Release Created Successfully! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh release-files/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
