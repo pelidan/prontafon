@@ -1,0 +1,23 @@
+[Unit]
+Description=Prontafon Desktop - Voice-to-keyboard bridge
+Documentation=https://github.com/pelidan/prontafon
+After=graphical-session.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/prontafon-desktop
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/prontafon %h/.local/share/prontafon
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

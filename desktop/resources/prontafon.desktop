@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Prontafon
+Comment=Voice-to-keyboard bridge
+Exec=/usr/local/bin/prontafon-desktop
+Icon=prontafon
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=voice;speech;dictation;bluetooth;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Applications

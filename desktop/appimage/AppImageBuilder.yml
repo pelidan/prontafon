@@ -1,0 +1,37 @@
+version: 1
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: com.prontafon.desktop
+    name: Prontafon
+    icon: prontafon
+    version: !ENV ${VERSION}
+    exec: usr/bin/prontafon-desktop
+    exec_args: $@
+  
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: 'deb http://archive.ubuntu.com/ubuntu jammy main universe'
+        key_url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+    include:
+      - libbluetooth3
+      - libgtk-4-1
+      - libadwaita-1-0
+      - libsqlite3-0
+    exclude: []
+  
+  files:
+    include: []
+    exclude:
+      - usr/share/man
+      - usr/share/doc
+  
+  runtime:
+    env:
+      APPDIR_LIBRARY_PATH: $APPDIR/usr/lib/x86_64-linux-gnu
+
+AppImage:
+  arch: x86_64
+  comp: gzip
+  update-information: gh-releases-zsync|pelidan|prontafon|latest|Prontafon-*x86_64.AppImage.zsync

@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+# Stop the service if running
+if systemctl --user is-active prontafon >/dev/null 2>&1; then
+    systemctl --user stop prontafon || true
+fi
+
+# Disable the service if enabled
+if systemctl --user is-enabled prontafon >/dev/null 2>&1; then
+    systemctl --user disable prontafon || true
+fi
+
+echo "Prontafon service stopped and disabled"
+
+exit 0

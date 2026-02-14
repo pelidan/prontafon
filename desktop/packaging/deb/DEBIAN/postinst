@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
+fi
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+# Reload systemd user daemon
+if [ -d /run/systemd/system ]; then
+    systemctl --global daemon-reload || true
+fi
+
+echo ""
+echo "=========================================="
+echo " Prontafon Desktop installed!"
+echo "=========================================="
+echo ""
+echo "To start Prontafon:"
+echo "  systemctl --user start prontafon"
+echo ""
+echo "To enable autostart:"
+echo "  systemctl --user enable prontafon"
+echo ""
+echo "Or run from application menu or command line:"
+echo "  prontafon-desktop"
+echo ""
+echo "Make sure Bluetooth is enabled:"
+echo "  sudo systemctl enable bluetooth"
+echo "  sudo systemctl start bluetooth"
+echo ""
+
+exit 0
