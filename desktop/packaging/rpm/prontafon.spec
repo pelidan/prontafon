@@ -121,7 +121,7 @@ if [ "$1" -eq 0 ] && [ -x /usr/bin/gtk-update-icon-cache ]; then
 fi
 
 %changelog
-* Fri Jan 31 2026 Daniel Pelikan <development@pelikan.one> - 0.2.0-1
+* Fri Jan 31 2026 Daniel Pelikan <development@prontafon.com> - 0.2.0-1
 - BREAKING: Migrated from Bluetooth Classic (RFCOMM) to BLE
 - Improved connection speed and power efficiency
 - Better Android 12+ compatibility
