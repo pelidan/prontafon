@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.prontafon.data.repository.PreferencesRepository
 import com.prontafon.service.AudioFocusObserver
 import com.prontafon.service.speech.SpeechRecognitionManager
 import dagger.hilt.android.HiltAndroidApp
@@ -55,7 +54,6 @@ class ProntafonApplication : Application() {
             
             val speechRecognitionManager = entryPoint.speechRecognitionManager()
             val audioFocusObserver = entryPoint.audioFocusObserver()
-            val preferencesRepository = entryPoint.preferencesRepository()
             
             // Initialize speech recognition manager on app start
             applicationScope.launch {
@@ -64,19 +62,11 @@ class ProntafonApplication : Application() {
             }
             
             // Register lifecycle observer to stop speech recognition when app goes to background
-            // BUT only if background listening is NOT enabled
             val lifecycleObserver = object : DefaultLifecycleObserver {
                 override fun onStop(owner: LifecycleOwner) {
-                    val backgroundListeningEnabled = preferencesRepository.backgroundListening.value
-                    Log.d(TAG, "App moved to background - backgroundListening=$backgroundListeningEnabled")
-                    
-                    if (backgroundListeningEnabled) {
-                        Log.d(TAG, "Background listening enabled, keeping speech recognition active")
-                    } else {
-                        Log.d(TAG, "Background listening disabled, stopping speech recognition")
-                        applicationScope.launch {
-                            speechRecognitionManager.stopListening()
-                        }
+                    Log.d(TAG, "App moved to background - stopping speech recognition")
+                    applicationScope.launch {
+                        speechRecognitionManager.stopListening()
                     }
                 }
             }
@@ -104,6 +94,5 @@ class ProntafonApplication : Application() {
     interface AppDependencies {
         fun speechRecognitionManager(): SpeechRecognitionManager
         fun audioFocusObserver(): AudioFocusObserver
-        fun preferencesRepository(): PreferencesRepository
     }
 }

@@ -17,7 +17,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::crypto::CryptoContext;
 
@@ -149,6 +149,20 @@ impl Message {
     /// Verify and decrypt the message payload.
     pub fn verify_and_decrypt(&mut self, ctx: &CryptoContext) -> Result<()> {
         if !self.verify(ctx) {
+            let calculated = ctx.checksum(
+                self.version,
+                self.message_type.as_str(),
+                &self.payload,
+                self.timestamp,
+            );
+            warn!(
+                "Checksum verification failed for {}: expected={}, calculated={}, version={}, timestamp={}",
+                self.message_type.as_str(),
+                self.checksum,
+                calculated,
+                self.version,
+                self.timestamp
+            );
             return Err(anyhow!("Checksum verification failed"));
         }
 

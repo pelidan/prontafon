@@ -450,6 +450,7 @@ class BleManager @Inject constructor(
                 val keyResult = cryptoManager.deriveKeyFromEcdh(ecdhSharedSecret, myDeviceId, payload.deviceId)
                 
                 keyResult.onSuccess { key ->
+                    Log.d(TAG, "BleManager - Derived key (first 8 bytes): ${key.take(8).joinToString("") { "%02x".format(it) }}")
                     sharedSecret = key
                     ecdhKeyPair = null
                     Log.d(TAG, "Shared secret derived via ECDH")

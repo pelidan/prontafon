@@ -43,7 +43,7 @@ class SpeechRecognitionManager @Inject constructor(
     companion object {
         private const val TAG = "SpeechRecognitionMgr"
         
-        // Silence timer configuration (beep prevention)
+         // Silence timer configuration (beep prevention)
         // Set to 4s to proactively restart before Google's ~5s ERROR_NO_MATCH timeout
         private val SILENCE_TIMEOUT = 4.seconds
         
@@ -558,13 +558,14 @@ class SpeechRecognitionManager @Inject constructor(
      */
     private fun restartWithMutedCancel() {
         // Step 1: Mute immediately (T+0ms)
-        beepSuppressor.muteStreams()
+         beepSuppressor.muteStreams()
         
         // Step 2: Wait for mute propagation, then cancel & destroy (T+50ms)
         mainHandler.postDelayed({
             performMutedCancelAndDestroy()
         }, SilentRestartTiming.mutePropagationDelayMs)
     }
+
 
     private fun performMutedCancelAndDestroy() {
         try {
@@ -1104,7 +1105,7 @@ class SpeechRecognitionManager @Inject constructor(
          * Legacy callback - may still be called on some devices.
          * Treat as segment result for compatibility.
          */
-        override fun onResults(results: Bundle?) {
+         override fun onResults(results: Bundle?) {
             Log.d(TAG, "onResults (legacy callback)")
             cancelEarlyMuteTimeout()
             results?.let { handleResult(it, isFinal = true) }

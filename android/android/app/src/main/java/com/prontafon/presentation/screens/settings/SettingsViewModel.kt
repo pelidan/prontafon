@@ -8,7 +8,6 @@ import com.prontafon.data.repository.PreferencesRepository
 import com.prontafon.service.ble.BleManager
 import com.prontafon.service.speech.SpeechRecognitionManager
 import com.prontafon.util.crypto.SecureStorageManager
-import com.prontafon.util.permissions.PermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
@@ -32,7 +31,6 @@ class SettingsViewModel @Inject constructor(
     private val speechRecognitionManager: SpeechRecognitionManager,
     private val secureStorage: SecureStorageManager,
     private val bleManager: BleManager,
-    private val permissionManager: PermissionManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     
@@ -42,7 +40,6 @@ class SettingsViewModel @Inject constructor(
     val availableLocales: StateFlow<List<Locale>> = speechRecognitionManager.availableLocales
     val showRecognizedText: StateFlow<Boolean> = preferencesRepository.showRecognizedText
     val keepScreenOn: StateFlow<Boolean> = preferencesRepository.keepScreenOn
-    val backgroundListening: StateFlow<Boolean> = preferencesRepository.backgroundListening
     
     // ==================== Connection Settings ====================
     
@@ -82,60 +79,6 @@ class SettingsViewModel @Inject constructor(
     
     fun setKeepScreenOn(enabled: Boolean) {
         preferencesRepository.setKeepScreenOn(enabled)
-    }
-    
-    /**
-     * Handle background listening toggle with permission check.
-     * If enabling, check if POST_NOTIFICATIONS permission is granted.
-     * If not granted, request permission. If denied, keep setting OFF.
-     */
-    fun onBackgroundListeningToggle(enabled: Boolean) {
-        if (enabled) {
-            // User wants to enable - check notification permission first
-            if (permissionManager.hasNotificationPermission()) {
-                // Permission already granted, enable it
-                preferencesRepository.setBackgroundListening(true)
-            } else {
-                // Need to request permission first
-                viewModelScope.launch {
-                    _uiEvent.send(SettingsUiEvent.RequestNotificationPermission)
-                }
-            }
-        } else {
-            // User wants to disable - no permission check needed
-            preferencesRepository.setBackgroundListening(false)
-        }
-    }
-    
-    /**
-     * Called when notification permission is granted
-     */
-    fun onNotificationPermissionGranted() {
-        preferencesRepository.setBackgroundListening(true)
-        viewModelScope.launch {
-            _uiEvent.send(SettingsUiEvent.ShowMessage("Background listening enabled"))
-        }
-    }
-    
-    /**
-     * Called when notification permission is denied
-     */
-    fun onNotificationPermissionDenied() {
-        preferencesRepository.setBackgroundListening(false)
-        viewModelScope.launch {
-            _uiEvent.send(
-                SettingsUiEvent.ShowMessage(
-                    "Background mode requires notification permission to show controls"
-                )
-            )
-        }
-    }
-    
-    /**
-     * Open app notification settings when user wants to manually grant permission
-     */
-    fun openNotificationSettings() {
-        permissionManager.openNotificationSettings()
     }
     
     // ==================== Connection Actions ====================
@@ -212,6 +155,5 @@ sealed class NavigationEvent {
  * One-time UI events for Settings screen
  */
 sealed interface SettingsUiEvent {
-    data object RequestNotificationPermission : SettingsUiEvent
     data class ShowMessage(val message: String) : SettingsUiEvent
 }

@@ -189,7 +189,6 @@ Data Layer (Repositories, Services)
 ### Key Components
 
 - **BleService**: Manages BLE connection and communication
-- **SpeechService**: Handles speech recognition
 - **CryptoManager**: AES-256-GCM encryption/decryption
 - **EcdhManager**: ECDH key exchange for pairing
 - **SecureStorageManager**: Encrypted storage for keys

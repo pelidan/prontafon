@@ -9,8 +9,6 @@ import com.prontafon.domain.model.*
 import com.prontafon.service.ble.BleConstants
 import com.prontafon.service.ble.BleManager
 import com.prontafon.service.speech.SpeechRecognitionManager
-import com.prontafon.service.speech.SpeechService
-import com.prontafon.util.permissions.PermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
@@ -32,7 +30,8 @@ data class HomeUiState(
     val errorMessage: String? = null,
     val isInitialized: Boolean = false,
     val showRecognizedText: Boolean = true,
-    val isAutoReconnecting: Boolean = false
+    val isAutoReconnecting: Boolean = false,
+    val isDimmed: Boolean = false
 )
 
 /**
@@ -71,7 +70,6 @@ class HomeViewModel @Inject constructor(
     private val bleManager: BleManager,
     private val speechRecognitionManager: SpeechRecognitionManager,
     private val preferencesRepository: PreferencesRepository,
-    private val permissionManager: PermissionManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     
@@ -304,8 +302,9 @@ class HomeViewModel @Inject constructor(
         
         // Check if this looks like genuinely new speech (text doesn't start with last partial)
         // This helps detect when user starts a completely new utterance
+        // Use case-insensitive comparison to avoid false resets on capitalization changes
         val isNewUtterance = lastPartialText.isNotEmpty() && 
-            !text.startsWith(lastPartialText.take(lastPartialText.length / 2 + 1))
+            !text.lowercase().startsWith(lastPartialText.take(lastPartialText.length / 2 + 1).lowercase())
         
         if (isNewUtterance) {
             // User started speaking something completely different - reset tracking
@@ -326,25 +325,13 @@ class HomeViewModel @Inject constructor(
     /**
      * Handle final speech recognition result.
      * 
-     * The final result may differ from partials in important ways:
-     * - Words that appeared in partials may be removed (e.g., "Aha" disappears)
-     * - New words may be added at the beginning or end (e.g., "vidíš" prepended)
-     * - Words may be reordered
+     * Final results from Google's speech recognition often differ from partial results
+     * due to post-processing (e.g., converting number words to digits: "čtvrtá" → "4").
+     * Since partial results already sent all words in real-time, we don't send final
+     * result corrections to avoid duplicates and preserve what the user actually spoke.
      * 
-     * Example scenarios that can cause word loss:
-     * 1. Partial: "nerozumíš" (1 word) -> Final: "vidíš nerozumíš" (2 words)
-     *    - "vidíš" appears at position 0, but sentWordCount=1, so standard loop
-     *      only sends position 1 onwards -> "vidíš" never sent!
-     * 
-     * 2. Partial: "Aha to bylo" (3 words) -> Final: "to bylo Koh" (3 words)
-     *    - sentWordCount=3, finalWords.size=3, standard loop sends nothing
-     *    - But "Koh" is new and wasn't in partials -> "Koh" never sent!
-     * 
-     * Fix: Compare final words with the last partial words and send any words
-     * from the final that weren't in the partial. This handles:
-     * - New words at the beginning (like "vidíš")
-     * - New words at the end (like "Koh")
-     * - Replaced words anywhere in the text
+     * We only update tracking state to keep sentWordCount consistent with the final
+     * word count, in case recognition restarts.
      */
     private fun handleFinalResult(text: String) {
         if (!isConnected() || text.isBlank()) return
@@ -352,42 +339,16 @@ class HomeViewModel @Inject constructor(
         val finalWords = splitIntoWords(text)
         val partialWords = splitIntoWords(lastPartialText)
         
-        // Find words in final that need to be sent
-        // Strategy: Build a "budget" of each word from partials, then find final words
-        // that exceed that budget (weren't in partials or appear more times than in partials)
-        
-        // Count occurrences of each word in partials (these were already sent)
-        val partialWordCounts = mutableMapOf<String, Int>()
-        for (word in partialWords) {
-            partialWordCounts[word] = (partialWordCounts[word] ?: 0) + 1
-        }
-        
-        // Find words in final that weren't fully covered by partials
-        val wordsToSend = mutableListOf<String>()
-        val usedFromPartial = mutableMapOf<String, Int>()
-        
-        for (word in finalWords) {
-            val available = partialWordCounts[word] ?: 0
-            val used = usedFromPartial[word] ?: 0
-            
-            if (used < available) {
-                // This word was in partials (already sent), mark it as used
-                usedFromPartial[word] = used + 1
-            } else {
-                // This word exceeds what was in partials - needs to be sent
-                wordsToSend.add(word)
-            }
-        }
-        
-        if (wordsToSend.isNotEmpty()) {
-            Log.d(TAG, "Final result has ${wordsToSend.size} words not in partial: $wordsToSend (final='$text', partial='$lastPartialText')")
-            for (word in wordsToSend) {
-                sendWord(word)
-            }
-        }
-        
-        // Update sentWordCount to final word count for consistency
+        // Only update sentWordCount to final word count for consistency.
+        // Don't send any words - partials already sent everything in real-time.
+        // Google's final results often rearrange words (e.g., "Kikinu" -> "k nim"),
+        // making word-count-based "new word" detection unreliable and causing duplicates.
         sentWordCount = finalWords.size
+        
+        // Log if final differs from partial (for debugging)
+        if (finalWords != partialWords) {
+            Log.d(TAG, "Final result differs from partial: final='$text', partial='$lastPartialText'")
+        }
         
         // Note: We intentionally do NOT reset sentWordCount here.
         // Android speech recognition auto-restarts and may produce overlapping results.
@@ -457,29 +418,8 @@ class HomeViewModel @Inject constructor(
             
             Log.d(TAG, "Starting new session: $currentSession")
             
-            // Check if background listening is enabled
-            val backgroundMode = preferencesRepository.backgroundListening.value
-            
-            if (backgroundMode) {
-                // Background mode requires notification permission
-                if (!permissionManager.hasNotificationPermission()) {
-                    // Permission was revoked - auto-disable background mode and use direct manager
-                    Log.w(TAG, "Background mode enabled but notification permission not granted - auto-disabling")
-                    preferencesRepository.setBackgroundListening(false)
-                    _events.send(HomeEvent.ShowSnackbar("Background mode disabled - notification permission required"))
-                    
-                    // Fall back to direct manager call (foreground-only)
-                    speechRecognitionManager.startListening()
-                } else {
-                    // Use foreground service for background mode
-                    Log.d(TAG, "Starting with background mode - using SpeechService")
-                    SpeechService.start(context)
-                }
-            } else {
-                // Direct call to manager for foreground-only mode
-                Log.d(TAG, "Starting without background mode - direct manager call")
-                speechRecognitionManager.startListening()
-            }
+            // Direct call to manager for foreground-only mode
+            speechRecognitionManager.startListening()
         }
     }
     
@@ -488,15 +428,7 @@ class HomeViewModel @Inject constructor(
      */
     fun stopListening() {
         viewModelScope.launch {
-            if (SpeechService.isRunning.value) {
-                // Stop the foreground service
-                Log.d(TAG, "Stopping via SpeechService")
-                SpeechService.stop(context)
-            } else {
-                // Direct call to manager
-                Log.d(TAG, "Stopping via direct manager call")
-                speechRecognitionManager.stopListening()
-            }
+            speechRecognitionManager.stopListening()
         }
     }
     
@@ -535,6 +467,15 @@ class HomeViewModel @Inject constructor(
         }
     }
     
+    // ==================== UI Actions ====================
+    
+    /**
+     * Toggle screen dimming state
+     */
+    fun toggleDim() {
+        _uiState.update { it.copy(isDimmed = !it.isDimmed) }
+    }
+    
     // ==================== Error Handling ====================
     
     /**
@@ -571,21 +512,11 @@ class HomeViewModel @Inject constructor(
     
     override fun onCleared() {
         super.onCleared()
-        // IMPORTANT: If the service is running, DO NOT stop it here.
-        // The service must survive ViewModel destruction for background mode.
-        // The user will stop it via notification Stop button.
-        // Only stop if we're in direct (non-service) mode.
-        
-        if (SpeechService.isRunning.value) {
-            Log.d(TAG, "onCleared: service running, keeping it alive for background mode")
-            // Don't stop - let the service continue
-        } else {
-            Log.d(TAG, "onCleared: stopping speech recognition (no service running)")
-            try {
-                speechRecognitionManager.destroy()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping speech recognition in onCleared", e)
-            }
+        Log.d(TAG, "onCleared: stopping speech recognition")
+        try {
+            speechRecognitionManager.destroy()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping speech recognition in onCleared", e)
         }
     }
 }

@@ -1,14 +1,9 @@
 package com.prontafon.presentation.screens.settings
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.Check
@@ -51,7 +46,6 @@ fun SettingsScreen(
     val availableLocales by viewModel.availableLocales.collectAsState()
     val showRecognizedText by viewModel.showRecognizedText.collectAsState()
     val keepScreenOn by viewModel.keepScreenOn.collectAsState()
-    val backgroundListening by viewModel.backgroundListening.collectAsState()
     
     val autoReconnect by viewModel.autoReconnect.collectAsState()
     val pairedDevices by viewModel.pairedDevices.collectAsState()
@@ -60,18 +54,6 @@ fun SettingsScreen(
     var showClearDataDialog by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
-    
-    // Permission launcher for POST_NOTIFICATIONS (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { granted ->
-            if (granted) {
-                viewModel.onNotificationPermissionGranted()
-            } else {
-                viewModel.onNotificationPermissionDenied()
-            }
-        }
-    )
     
     // Handle navigation events
     LaunchedEffect(Unit) {
@@ -86,11 +68,6 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collect { event ->
             when (event) {
-                is SettingsUiEvent.RequestNotificationPermission -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }
                 is SettingsUiEvent.ShowMessage -> {
                     snackbarHostState.showSnackbar(
                         message = event.message,
@@ -145,15 +122,6 @@ fun SettingsScreen(
                     icon = Icons.Default.ScreenLockPortrait,
                     checked = keepScreenOn,
                     onCheckedChange = viewModel::setKeepScreenOn
-                )
-                
-                // Background Listening Toggle
-                SettingsToggleItem(
-                    title = "Background Listening",
-                    subtitle = "Continue listening when screen is off (uses battery)",
-                    icon = Icons.Default.BatteryAlert,
-                    checked = backgroundListening,
-                    onCheckedChange = viewModel::onBackgroundListeningToggle
                 )
             }
             

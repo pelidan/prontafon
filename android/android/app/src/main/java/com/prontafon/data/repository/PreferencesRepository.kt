@@ -25,14 +25,12 @@ class PreferencesRepository @Inject constructor(
         private const val KEY_SHOW_RECOGNIZED_TEXT = "show_recognized_text"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         private const val KEY_AUTO_RECONNECT = "auto_reconnect"
-        private const val KEY_BACKGROUND_LISTENING = "background_listening"
         
         // Defaults
         private const val DEFAULT_LOCALE = "cs-CZ"
         private const val DEFAULT_SHOW_RECOGNIZED_TEXT = true
         private const val DEFAULT_KEEP_SCREEN_ON = true
         private const val DEFAULT_AUTO_RECONNECT = true
-        private const val DEFAULT_BACKGROUND_LISTENING = false
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -52,9 +50,6 @@ class PreferencesRepository @Inject constructor(
     
     private val _autoReconnect = MutableStateFlow(getBoolean(KEY_AUTO_RECONNECT, DEFAULT_AUTO_RECONNECT))
     val autoReconnect: StateFlow<Boolean> = _autoReconnect.asStateFlow()
-    
-    private val _backgroundListening = MutableStateFlow(getBoolean(KEY_BACKGROUND_LISTENING, DEFAULT_BACKGROUND_LISTENING))
-    val backgroundListening: StateFlow<Boolean> = _backgroundListening.asStateFlow()
     
     // ==================== Setters ====================
     
@@ -76,11 +71,6 @@ class PreferencesRepository @Inject constructor(
     fun setAutoReconnect(enabled: Boolean) {
         putBoolean(KEY_AUTO_RECONNECT, enabled)
         _autoReconnect.value = enabled
-    }
-    
-    fun setBackgroundListening(enabled: Boolean) {
-        putBoolean(KEY_BACKGROUND_LISTENING, enabled)
-        _backgroundListening.value = enabled
     }
     
     // ==================== Private Helpers ====================
@@ -113,6 +103,5 @@ class PreferencesRepository @Inject constructor(
         _showRecognizedText.value = DEFAULT_SHOW_RECOGNIZED_TEXT
         _keepScreenOn.value = DEFAULT_KEEP_SCREEN_ON
         _autoReconnect.value = DEFAULT_AUTO_RECONNECT
-        _backgroundListening.value = DEFAULT_BACKGROUND_LISTENING
     }
 }

@@ -142,6 +142,10 @@ data class Message(
      * @return 8-character hex string (first 4 bytes of SHA-256 hash)
      */
     fun computeChecksum(secret: ByteArray): String {
+        // Log checksum computation for WORD messages
+        if (messageType == MessageType.WORD) {
+            android.util.Log.d("Message", "Computing checksum: version=$version, type=${messageType.value}, payloadLen=${payload.length}, timestamp=$timestamp")
+        }
         return CryptoManager.calculateChecksum(
             version = version,
             msgType = messageType.value,

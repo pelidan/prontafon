@@ -97,32 +97,6 @@ class PermissionManager @Inject constructor(
         val allPermissions = PermissionState.getAllRequiredPermissions()
         return arePermissionsGranted(allPermissions)
     }
-
-    /**
-     * Check if POST_NOTIFICATIONS permission is granted
-     * Returns true on Android < 13 (permission not required)
-     */
-    fun hasNotificationPermission(): Boolean {
-        // POST_NOTIFICATIONS only required on Android 13+ (API 33+)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            return true
-        }
-
-        return isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)
-    }
-
-    /**
-     * Open app's notification settings page
-     * Allows user to manually grant notification permission
-     */
-    fun openNotificationSettings() {
-        val intent = Intent().apply {
-            action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
-            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    }
     
     /**
      * Gets the current permission state for all app permissions.

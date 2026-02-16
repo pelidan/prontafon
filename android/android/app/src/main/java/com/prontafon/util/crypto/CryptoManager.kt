@@ -186,6 +186,8 @@ class CryptoManager @Inject constructor() {
                 spec.clearPassword()
             }
             
+            android.util.Log.d("CryptoManager", "Kotlin derived key (first 8 bytes): ${key.take(8).joinToString("") { "%02x".format(it) }}")
+            
             Result.success(key)
         } catch (e: Exception) {
             Result.failure(CryptoException("Key derivation from ECDH failed: ${e.message}", e))

@@ -133,10 +133,42 @@ fun HomeScreen(
                     onNavigateToConnection = onNavigateToConnection,
                     onClearError = viewModel::clearError,
                     onDisconnect = viewModel::disconnect,
-                    onCancelAutoReconnect = viewModel::cancelAutoReconnect
+                    onCancelAutoReconnect = viewModel::cancelAutoReconnect,
+                    onToggleDim = viewModel::toggleDim
                 )
             }
         }
+    }
+    
+    // Dim overlay - outside Scaffold so it covers everything
+    if (uiState.isDimmed) {
+        val activity = context as? Activity
+        
+        // Set brightness to minimum
+        DisposableEffect(Unit) {
+            activity?.window?.attributes = activity?.window?.attributes?.apply {
+                screenBrightness = 0f
+            }
+            
+            onDispose {
+                // Restore system default brightness
+                activity?.window?.attributes = activity?.window?.attributes?.apply {
+                    screenBrightness = -1f
+                }
+            }
+        }
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.95f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    viewModel.toggleDim()
+                }
+        )
     }
 }
 
@@ -147,7 +179,8 @@ private fun HomeContent(
     onNavigateToConnection: () -> Unit,
     onClearError: () -> Unit,
     onDisconnect: () -> Unit,
-    onCancelAutoReconnect: () -> Unit
+    onCancelAutoReconnect: () -> Unit,
+    onToggleDim: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -199,6 +232,27 @@ private fun HomeContent(
         // Instructions
         if (!uiState.isListening && uiState.currentText.isEmpty()) {
             InstructionsCard(isConnected = uiState.connectionState == BtConnectionState.CONNECTED)
+        }
+        
+        Spacer(Modifier.height(16.dp))
+        
+        // Dim Screen Button
+        if (!uiState.isDimmed) {
+            Button(
+                onClick = onToggleDim,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Brightness2,
+                    contentDescription = "Dim Screen"
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Dim Screen")
+            }
         }
     }
 }
