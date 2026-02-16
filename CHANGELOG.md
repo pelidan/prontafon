@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-16
+
+### Added
+- Dim screen button on HomeScreen that dims entire display to save battery
+  - Full-screen overlay covering status bar, top bar, and content
+  - Sets window brightness to minimum; tap anywhere to restore
+- Debug logging for checksum verification and crypto key derivation (Rust and Kotlin)
+
+### Fixed
+- Fixed word duplication caused by handleFinalResult sending words already sent via partial results
+- Fixed false new-utterance detection on capitalization changes (e.g., jasně → Jasně) by making comparison case-insensitive
+
+### Removed
+- Removed SpeechService foreground service and all background listening functionality
+- Removed 5 permissions: FOREGROUND_SERVICE, FOREGROUND_SERVICE_CONNECTED_DEVICE, FOREGROUND_SERVICE_MICROPHONE, POST_NOTIFICATIONS, WAKE_LOCK
+
 ## [0.2.0] - 2026-02-16
 
 ### Added
